@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, Timestamp } from "firebase/firestore";
 import { db } from "@/libs/firebase";
 import { DataGrid } from "@mui/x-data-grid";
 import { format } from "date-fns";
@@ -20,19 +20,25 @@ const OrderClient = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     const fetchOrders = async () => {
       try {
         const ordersRef = collection(db, "orders");
         const q = query(ordersRef, orderBy("createdAt", "desc"));
         const querySnapshot = await getDocs(q);
-        
-        const ordersData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as Order[];
-        
+  
+        const ordersData: Order[] = querySnapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            userEmail: data.userEmail || "", // Eğer yoksa varsayılan değer ata
+            totalAmount: data.totalAmount || 0,
+            status: data.status || "pending", // Varsayılan değer ekle
+            createdAt: data.createdAt || Timestamp.now(), // Varsayılan değer
+            products: data.products || [], // Eğer eksikse boş dizi ata
+          };
+        });
+  
         setOrders(ordersData);
       } catch (error) {
         console.error("Siparişler yüklenirken hata oluştu:", error);
@@ -41,9 +47,11 @@ const OrderClient = () => {
         setLoading(false);
       }
     };
-
+  
     fetchOrders();
   }, []);
+  
+  
 
   const columns = [
     { field: "id", headerName: "Sipariş ID", width: 220 },
@@ -76,7 +84,7 @@ const OrderClient = () => {
       headerName: "Sipariş Tarihi",
       width: 180,
       renderCell: (params: any) => {
-        const date = params.value?.toDate?.();
+        const date = params.value instanceof Timestamp ? params.value.toDate() : null;
         return date ? format(date, "dd MMMM yyyy HH:mm", { locale: tr }) : "-";
       }
     }
